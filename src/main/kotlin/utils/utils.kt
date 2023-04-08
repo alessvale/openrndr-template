@@ -138,6 +138,9 @@ fun ShapeContour.half(): List<ShapeContour> {
     return sh.map { it.close() }
 }
 
+/**
+ * Implements a simple feedback line which allows the insertion of a filter
+ */
 class Feedback(private val w: Int, private val h:Int){
     val cumulated = colorBuffer(w, h, type = ColorType.FLOAT32)
     private val rt = renderTarget(w, h){
