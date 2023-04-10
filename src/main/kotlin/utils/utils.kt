@@ -139,16 +139,16 @@ fun ShapeContour.half(): List<ShapeContour> {
 }
 
 /**
- * Implements a simple feedback line which allows the insertion of a filter
+ * Implements a simple feedback line which allows the insertion of a filter.
  */
-class Feedback(private val w: Int, private val h:Int){
+class Feedback(private val w: Int, private val h: Int) {
     val cumulated = colorBuffer(w, h, type = ColorType.FLOAT32)
-    private val rt = renderTarget(w, h){
+    private val rt = renderTarget(w, h) {
         colorBuffer(type = ColorType.FLOAT32)
     }
 
-    fun next(drawer: Drawer, current:ColorBuffer, feedback:Double = 0.8, filter:Filter? = null) {
-        drawer.isolatedWithTarget(rt){
+    private fun makeFrame(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8) {
+        drawer.isolatedWithTarget(rt) {
             drawer.clear(ColorRGBa.BLACK)
             drawer.ortho()
             drawer.fill = ColorRGBa.WHITE
@@ -169,6 +169,19 @@ class Feedback(private val w: Int, private val h:Int){
             drawer.rectangle(Rectangle(0.0, 0.0, w * 1.0, h * 1.0))
         }
         rt.colorBuffer(0).copyTo(cumulated)
+    }
+
+    fun next(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8, filter: Filter? = null) {
+        makeFrame(drawer, current, feedback)
         filter?.apply(cumulated, cumulated)
+    }
+
+    fun next(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8, filters: Array<Filter1to1>? = null) {
+        makeFrame(drawer, current, feedback)
+        filters?.let {
+            it.forEach { filter ->
+                filter.apply(cumulated, cumulated)
+            }
+        }
     }
 }
