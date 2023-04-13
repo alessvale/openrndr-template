@@ -6,6 +6,7 @@ import org.openrndr.extra.noise.Random
 import org.openrndr.extra.noise.uniform
 import org.openrndr.math.Vector2
 import org.openrndr.shape.*
+import java.util.*
 import kotlin.math.sign
 
 
@@ -49,7 +50,8 @@ fun ShapeContour.centroid(): Vector2? {
 /**
  * Returns n points sampled from the black region in a b&w texture.
  */
-fun samplePoints(tex: ColorBuffer, n: Int): List<Vector2> {
+fun ColorBuffer.samplePoints(n: Int): List<Vector2> {
+    val tex = this
     val shadow = tex.shadow
     shadow.download()
     val points = mutableListOf<Vector2>()
@@ -138,6 +140,35 @@ fun ShapeContour.half(): List<ShapeContour> {
     return sh.map { it.close() }
 }
 
+/**
+ * Implement uniform random sample with replacement
+ */
+fun <T> Collection<T>.uniformWithoutReplacement(k: Int): List<T>{
+    val input = this.toMutableList()
+    if ((input.size < k) || (k  == 0)) {
+        throw Exception("Items size and weights size are different!")
+    }
+    val output = mutableListOf<T>()
+    while (output.size < k){
+        val item = input.withIndex().toList().random()
+        output.add(item.value)
+        input.removeAt(item.index)
+    }
+    return output.toList()
+}
+
+/**
+ * Implement k-step cycling through a collection
+ */
+fun <T> Collection<T>.cycle(k:Int = 1, clockwise:Boolean = true):List<T>{
+    var output = this.toList()
+    (0 until k).forEach{
+        output = if(clockwise) {output.takeLast(1) + output.dropLast(1)}
+        else
+        {output.drop(1) + output.take(1)}
+    }
+    return output.toList()
+}
 /**
  * Implements a simple feedback line which allows the insertion of a filter.
  */
