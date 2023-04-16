@@ -3,11 +3,15 @@ package utils
 import org.openrndr.color.ColorRGBa
 import org.openrndr.draw.*
 import org.openrndr.extra.noise.Random
+import org.openrndr.extra.noise.simplex
 import org.openrndr.extra.noise.uniform
 import org.openrndr.math.Vector2
 import org.openrndr.shape.*
-import java.util.*
+import java.nio.ByteBuffer
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.sign
+import kotlin.math.sin
 
 
 // Generates a random walk path starting from a point
@@ -96,7 +100,6 @@ fun <T> Collection<T>.randomWeighted(w: Collection<Double>): Pair<T, Int> {
         s += it
         if (t < s) {
             return Pair(items[i], i)
-            break
         }
     }
     return Pair(items.last(), items.size - 1)
@@ -168,6 +171,69 @@ fun <T> Collection<T>.cycle(k:Int = 1, clockwise:Boolean = true):List<T>{
         {output.drop(1) + output.take(1)}
     }
     return output.toList()
+}
+/**
+ * Implement comparator function for 2D points ordering
+ */
+fun less(a:Vector2, b:Vector2):Int {
+
+        if (a.x >= 0.0 && b.x < 0.0)
+            return 1
+        if (a.x  < 0.0 && b.x >= 0.0)
+            return 0
+        if ((a.x  == 0.0) && (b.x  == 0.0)) {
+            if (a.y  >= 0.0 || b.y >= 0.0)
+                return (a.y > b.y).compareTo(false)
+            return (b.y > a.y).compareTo(false)
+        }
+
+// compute the cross product of vectors (center -> a) x (center -> b)
+        val det = a.x * b.y  - b.x * a.y
+        if (det < 0.0)
+            return 1
+        if (det > 0.0)
+            return 0
+
+// points a and b are on the same line from the center
+// check which point is closer to the center
+        val d1 =a.x * a.x + a.y * a.y
+        val d2 =b.x * b.x + b.y * b.y
+        return if(d1 > d2) 1 else 0
+    }
+/**
+ * Implements clockwise sorting of a list of 2D points
+ */
+fun List<Vector2>.sortClockwise():List<Vector2>{
+    if (this.size == 1) return this
+    var cnt = Vector2.ZERO
+    this.forEach {
+        cnt += it / this.size.toDouble()
+    }
+    val points = this.map{it - cnt}
+    return points.sortedWith { a, b -> less(a, b) * 2 - 1 }.map{it + cnt}
+}
+/**
+ * Implements precomputed loopable simplex noise texture
+ */
+fun getNoiseTexture( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:Int = 128, freq: Double = 0.004 ):VolumeTexture {
+    val tn = volumeTexture(noiseWidth, noiseHeight, noiseDepth)
+    val buffer = ByteBuffer.allocateDirect(tn.width * tn.height * tn.format.componentCount * tn.type.componentSize)
+
+    for (z in 0 until tn.depth) {
+        for (y in 0 until tn.height) {
+            for (x in 0 until tn.width) {
+                val uVal = cos(z / noiseDepth.toDouble() * 2 * PI) * 0.5 + 0.5
+                val wVal = sin(z / noiseDepth.toDouble() * 2 * PI) * 0.5 + 0.5
+                val noiseValue = simplex(10, x * freq, y * freq, uVal, wVal) * 0.5 + 0.5
+                for (c in 0 until tn.format.componentCount) {
+                    buffer.put((noiseValue * 255).toInt().toByte())
+                }
+            }
+        }
+        buffer.rewind()
+        tn.write(z, buffer)
+    }
+    return tn
 }
 /**
  * Implements a simple feedback line which allows the insertion of a filter.
