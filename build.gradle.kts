@@ -27,7 +27,7 @@ val orxFeatures = setOf<String>(
 //  "orx-integral-image",
 //  "orx-interval-tree",
 //  "orx-jumpflood",
-//  "orx-kdtree",
+    "orx-kdtree",
 //  "orx-keyframer",      
 //  "orx-kinect-v1",
 //  "orx-kotlin-parser",
@@ -54,7 +54,7 @@ val orxFeatures = setOf<String>(
 //  "orx-tensorflow",    
 //  "orx-time-operators",
 //  "orx-timer",
-//  "orx-triangulation",
+    "orx-triangulation",
     "orx-video-profiles",
     "orx-view-box",
 )
@@ -107,6 +107,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.slf4j.api)
     implementation(libs.kotlin.logging)
+    implementation("io.ktor:ktor-client-core:2.2.4")
+    implementation("io.ktor:ktor-client-cio:2.2.4")
+    implementation("io.ktor:ktor-client-logging:2.2.4")
+    implementation("io.ktor:ktor-client-websockets:2.2.4")
+    implementation("io.ktor:ktor-client-okhttp:2.2.4")
+    implementation("org.json:json:20230227")
 
     when (applicationLogging) {
         Logging.NONE -> {

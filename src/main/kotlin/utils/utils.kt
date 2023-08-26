@@ -8,13 +8,11 @@ import org.openrndr.extra.noise.uniform
 import org.openrndr.math.Vector2
 import org.openrndr.shape.*
 import java.nio.ByteBuffer
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sign
-import kotlin.math.sin
+import kotlin.math.*
 
-
-// Generates a random walk path starting from a point
+/**
+ * Generates a random walk path starting from a point
+ */
 fun Vector2.randomWalk(n: Int, step: Double = 1.0): List<Vector2> {
     var start = this
     val points = mutableListOf<Vector2>()
@@ -26,8 +24,9 @@ fun Vector2.randomWalk(n: Int, step: Double = 1.0): List<Vector2> {
     }
     return points
 }
-
-// Constrains a 2d Vector to lie inside a rectangle
+/**
+* Constrains a 2d Vector to lie inside a rectangle
+*/
 fun Vector2.constrain(bound: Rectangle): Vector2 {
     var tmp = this
     if (tmp.x < bound.center.x - bound.width * 0.5) tmp = tmp.copy(x = bound.center.x - bound.width * 0.5)
@@ -36,10 +35,11 @@ fun Vector2.constrain(bound: Rectangle): Vector2 {
     if (tmp.y > bound.center.y + bound.height * 0.5) tmp = tmp.copy(x = bound.center.y + bound.height * 0.5)
     return tmp
 }
+/**
+ * Gets centroid of a ShapeContour
+ */
+fun ShapeContour.centroid(): Vector2 {
 
-// Gets centroid of a ShapeContour
-fun ShapeContour.centroid(): Vector2? {
-    if (this.closed) {
         var center = Vector2.ZERO
         var count = 0.0
         this.segments.forEach {
@@ -47,8 +47,6 @@ fun ShapeContour.centroid(): Vector2? {
             count += 1.0
         }
         return center / count
-    }
-    return null
 }
 
 /**
@@ -65,7 +63,33 @@ fun ColorBuffer.samplePoints(n: Int): List<Vector2> {
         while ((!found) && (count < 1000)) {
             val p = Vector2.uniform(Rectangle(0.0, 0.0, tex.width * 1.0, tex.height * 1.0))
             val c = shadow[p.x.toInt(), p.y.toInt()]
-            if (c.r == 0.0) {
+            if (c.r == 1.0) {
+                points.add(p)
+                found = true
+            } else {
+                count += 1
+            }
+        }
+    }
+    return points
+}
+
+/**
+ * Samples points in a buffer according to pixel luminance.
+ */
+fun ColorBuffer.samplePoints(n: Int, threshold:Double, prob:Double=0.0): List<Vector2> {
+    val tex = this
+    val shadow = tex.shadow
+    shadow.download()
+    val points = mutableListOf<Vector2>()
+    (0..n).forEach { _ ->
+        var found = false
+        var count = 0
+        while ((!found) && (count < 1000)) {
+            val p = Vector2.uniform(Rectangle(0.0, 0.0, tex.width * 1.0, tex.height * 1.0))
+            val c = shadow[p.x.toInt(), p.y.toInt()]
+            val b = c.luminance
+            if((b > threshold) || Random.bool(prob)) {
                 points.add(p)
                 found = true
             } else {
@@ -85,6 +109,9 @@ fun List<Vector2>.mostDistant(p: Vector2): Vector2 {
     return distances[idx].first
 }
 
+/**
+ * Performs sampling with weights
+ */
 fun <T> Collection<T>.randomWeighted(w: Collection<Double>): Pair<T, Int> {
     val items = this.toList()
     var weights = w.toList()
@@ -105,6 +132,10 @@ fun <T> Collection<T>.randomWeighted(w: Collection<Double>): Pair<T, Int> {
     return Pair(items.last(), items.size - 1)
 }
 
+
+/**
+ * Splits a rectangle
+ */
 fun Rectangle.split(how: Int, p: Double = 0.35): List<Rectangle> {
     val corner = this.corner
     val w = this.width
@@ -119,6 +150,33 @@ fun Rectangle.split(how: Int, p: Double = 0.35): List<Rectangle> {
     return result
 }
 
+/**
+ * Get geometry buffer from a list of line segments
+ */
+fun List<LineSegment>.getVertexBuffer(cols:List<ColorRGBa>):VertexBuffer{
+    val lines = this
+    val colors = cols.map{it.toVector4().xyz}
+    if (lines.size != colors.size) {
+        throw Exception("List of lines and colors must have the same size")
+    }
+    val geometry = vertexBuffer(vertexFormat {
+        position(3)
+        color(3)
+    }, 2 * lines.size)
+    geometry.put {
+        (lines zip colors).forEach {
+            write(it.first.start.x.toFloat(), it.first.start.y.toFloat(), 0.0.toFloat())
+            write(it.second.x.toFloat(), it.second.y.toFloat(), it.second.z.toFloat())
+            write(it.first.end.x.toFloat(), it.first.end.y.toFloat(), 0.0.toFloat())
+            write(it.second.x.toFloat(), it.second.y.toFloat(), it.second.z.toFloat())
+        }
+    }
+    return geometry
+}
+
+/**
+ * Hatches a rectangle
+ */
 fun Rectangle.hatch(dir: Vector2, w: Double = 5.0): List<Segment> {
     val corner = if (dir.x > 0) this.corner else this.corner + Vector2.UNIT_X * this.width
     val l = (this.center - corner).length * 2.0
@@ -136,6 +194,9 @@ fun Rectangle.hatch(dir: Vector2, w: Double = 5.0): List<Segment> {
     return segments.toList()
 }
 
+/**
+ * Splits a ShapeContour
+ */
 fun ShapeContour.half(): List<ShapeContour> {
     val pointA = this.position(Random.double(0.2, 0.4))
     val pointB = this.position(Random.double(0.6, 0.8))
@@ -144,7 +205,7 @@ fun ShapeContour.half(): List<ShapeContour> {
 }
 
 /**
- * Implement uniform random sample with replacement
+ * Implements uniform random sample with replacement
  */
 fun <T> Collection<T>.uniformWithoutReplacement(k: Int): List<T>{
     val input = this.toMutableList()
@@ -268,6 +329,9 @@ class Feedback(private val w: Int, private val h: Int) {
         rt.colorBuffer(0).copyTo(cumulated)
     }
 
+    fun next(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8) {
+        makeFrame(drawer, current, feedback)
+    }
     fun next(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8, filter: Filter? = null) {
         makeFrame(drawer, current, feedback)
         filter?.apply(cumulated, cumulated)
