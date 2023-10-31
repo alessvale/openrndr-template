@@ -285,7 +285,7 @@ class Feedback(private val w: Int, private val h: Int) {
 }
 
 /**
- * Creates index buffer from list of vertices
+ * Creates index buffer from list of vertices.
  */
 
 fun getBufferFromIndices(indices: List<Int>):IndexBuffer{
