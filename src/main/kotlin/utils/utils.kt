@@ -6,7 +6,9 @@ import org.openrndr.extra.noise.Random
 import org.openrndr.extra.noise.simplex
 import org.openrndr.extra.noise.uniform
 import org.openrndr.math.Vector2
+import org.openrndr.math.Vector3
 import org.openrndr.shape.*
+import java.io.File
 import java.nio.ByteBuffer
 import kotlin.math.*
 
@@ -24,9 +26,10 @@ fun Vector2.randomWalk(n: Int, step: Double = 1.0): List<Vector2> {
     }
     return points
 }
+
 /**
-* Constrains a 2d Vector to lie inside a rectangle
-*/
+ * Constrains a 2d Vector to lie inside a rectangle
+ */
 fun Vector2.constrain(bound: Rectangle): Vector2 {
     var tmp = this
     if (tmp.x < bound.center.x - bound.width * 0.5) tmp = tmp.copy(x = bound.center.x - bound.width * 0.5)
@@ -35,18 +38,19 @@ fun Vector2.constrain(bound: Rectangle): Vector2 {
     if (tmp.y > bound.center.y + bound.height * 0.5) tmp = tmp.copy(x = bound.center.y + bound.height * 0.5)
     return tmp
 }
+
 /**
  * Gets centroid of a ShapeContour
  */
 fun ShapeContour.centroid(): Vector2 {
 
-        var center = Vector2.ZERO
-        var count = 0.0
-        this.segments.forEach {
-            center += it.start
-            count += 1.0
-        }
-        return center / count
+    var center = Vector2.ZERO
+    var count = 0.0
+    this.segments.forEach {
+        center += it.start
+        count += 1.0
+    }
+    return center / count
 }
 
 /**
@@ -77,7 +81,7 @@ fun ColorBuffer.samplePoints(n: Int): List<Vector2> {
 /**
  * Samples points in a buffer according to pixel luminance.
  */
-fun ColorBuffer.samplePoints(n: Int, threshold:Double, prob:Double=0.0): List<Vector2> {
+fun ColorBuffer.samplePoints(n: Int, threshold: Double, prob: Double = 0.0): List<Vector2> {
     val tex = this
     val shadow = tex.shadow
     shadow.download()
@@ -89,7 +93,7 @@ fun ColorBuffer.samplePoints(n: Int, threshold:Double, prob:Double=0.0): List<Ve
             val p = Vector2.uniform(Rectangle(0.0, 0.0, tex.width * 1.0, tex.height * 1.0))
             val c = shadow[p.x.toInt(), p.y.toInt()]
             val b = c.luminance
-            if((b > threshold) || Random.bool(prob)) {
+            if ((b > threshold) || Random.bool(prob)) {
                 points.add(p)
                 found = true
             } else {
@@ -153,9 +157,9 @@ fun Rectangle.split(how: Int, p: Double = 0.35): List<Rectangle> {
 /**
  * Get geometry buffer from a list of line segments
  */
-fun List<LineSegment>.getVertexBuffer(cols:List<ColorRGBa>):VertexBuffer{
+fun List<LineSegment>.getVertexBuffer(cols: List<ColorRGBa>): VertexBuffer {
     val lines = this
-    val colors = cols.map{it.toVector4().xyz}
+    val colors = cols.map { it.toVector4().xyz }
     if (lines.size != colors.size) {
         throw Exception("List of lines and colors must have the same size")
     }
@@ -207,13 +211,13 @@ fun ShapeContour.half(): List<ShapeContour> {
 /**
  * Implements uniform random sample with replacement
  */
-fun <T> Collection<T>.uniformWithoutReplacement(k: Int): List<T>{
+fun <T> Collection<T>.uniformWithoutReplacement(k: Int): List<T> {
     val input = this.toMutableList()
-    if ((input.size < k) || (k  == 0)) {
+    if ((input.size < k) || (k == 0)) {
         throw Exception("Items size and weights size are different!")
     }
     val output = mutableListOf<T>()
-    while (output.size < k){
+    while (output.size < k) {
         val item = input.withIndex().toList().random()
         output.add(item.value)
         input.removeAt(item.index)
@@ -224,59 +228,69 @@ fun <T> Collection<T>.uniformWithoutReplacement(k: Int): List<T>{
 /**
  * Implement k-step cycling through a collection
  */
-fun <T> Collection<T>.cycle(k:Int = 1, clockwise:Boolean = true):List<T>{
+fun <T> Collection<T>.cycle(k: Int = 1, clockwise: Boolean = true): List<T> {
     var output = this.toList()
-    (0 until k).forEach{
-        output = if(clockwise) {output.takeLast(1) + output.dropLast(1)}
-        else
-        {output.drop(1) + output.take(1)}
+    (0 until k).forEach {
+        output = if (clockwise) {
+            output.takeLast(1) + output.dropLast(1)
+        } else {
+            output.drop(1) + output.take(1)
+        }
     }
     return output.toList()
 }
+
 /**
  * Implement comparator function for 2D points ordering
  */
-fun less(a:Vector2, b:Vector2):Int {
+fun less(a: Vector2, b: Vector2): Int {
 
-        if (a.x >= 0.0 && b.x < 0.0)
-            return 1
-        if (a.x  < 0.0 && b.x >= 0.0)
-            return 0
-        if ((a.x  == 0.0) && (b.x  == 0.0)) {
-            if (a.y  >= 0.0 || b.y >= 0.0)
-                return (a.y > b.y).compareTo(false)
-            return (b.y > a.y).compareTo(false)
-        }
+    if (a.x >= 0.0 && b.x < 0.0)
+        return 1
+    if (a.x < 0.0 && b.x >= 0.0)
+        return 0
+    if ((a.x == 0.0) && (b.x == 0.0)) {
+        if (a.y >= 0.0 || b.y >= 0.0)
+            return (a.y > b.y).compareTo(false)
+        return (b.y > a.y).compareTo(false)
+    }
 
 // compute the cross product of vectors (center -> a) x (center -> b)
-        val det = a.x * b.y  - b.x * a.y
-        if (det < 0.0)
-            return 1
-        if (det > 0.0)
-            return 0
+    val det = a.x * b.y - b.x * a.y
+    if (det < 0.0)
+        return 1
+    if (det > 0.0)
+        return 0
 
 // points a and b are on the same line from the center
 // check which point is closer to the center
-        val d1 =a.x * a.x + a.y * a.y
-        val d2 =b.x * b.x + b.y * b.y
-        return if(d1 > d2) 1 else 0
-    }
+    val d1 = a.x * a.x + a.y * a.y
+    val d2 = b.x * b.x + b.y * b.y
+    return if (d1 > d2) 1 else 0
+}
+
 /**
  * Implements clockwise sorting of a list of 2D points
  */
-fun List<Vector2>.sortClockwise():List<Vector2>{
+fun List<Vector2>.sortClockwise(): List<Vector2> {
     if (this.size == 1) return this
     var cnt = Vector2.ZERO
     this.forEach {
         cnt += it / this.size.toDouble()
     }
-    val points = this.map{it - cnt}
-    return points.sortedWith { a, b -> less(a, b) * 2 - 1 }.map{it + cnt}
+    val points = this.map { it - cnt }
+    return points.sortedWith { a, b -> less(a, b) * 2 - 1 }.map { it + cnt }
 }
+
 /**
  * Implements precomputed loopable simplex noise texture
  */
-fun getNoiseTexture( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:Int = 128, freq: Double = 0.004 ):VolumeTexture {
+fun getNoiseTexture(
+    noiseWidth: Int = 512,
+    noiseHeight: Int = 512,
+    noiseDepth: Int = 128,
+    freq: Double = 0.004
+): VolumeTexture {
     val tn = volumeTexture(noiseWidth, noiseHeight, noiseDepth)
     val buffer = ByteBuffer.allocateDirect(tn.width * tn.height * tn.format.componentCount * tn.type.componentSize)
 
@@ -296,6 +310,7 @@ fun getNoiseTexture( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:In
     }
     return tn
 }
+
 /**
  * Implements a simple feedback line which allows the insertion of a filter.
  */
@@ -332,6 +347,7 @@ class Feedback(private val w: Int, private val h: Int) {
     fun next(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8) {
         makeFrame(drawer, current, feedback)
     }
+
     fun next(drawer: Drawer, current: ColorBuffer, feedback: Double = 0.8, filter: Filter? = null) {
         makeFrame(drawer, current, feedback)
         filter?.apply(cumulated, cumulated)
@@ -342,6 +358,56 @@ class Feedback(private val w: Int, private val h: Int) {
         filters?.let {
             it.forEach { filter ->
                 filter.apply(cumulated, cumulated)
+            }
+        }
+    }
+}
+
+/**
+ * Export a list of lines to an .obj file.
+ */
+class ObjWriter() {
+    private val lines = mutableListOf<List<Vector3>>()
+
+    private fun addLine(l: List<Vector3>) {
+        lines.add(l)
+    }
+
+    fun addLines(l: List<List<Vector3>>) {
+        l.forEach {
+            addLine(it)
+        }
+    }
+
+    fun export(path: String) {
+        val vertices = lines.flatten()
+        val obj = buildString {
+            vertices.forEach { v ->
+                appendLine("v ${v.x} ${v.y} ${v.z}")
+            }
+            var count = 0
+            lines.forEach { l ->
+                var idx = ""
+                (l.indices).forEach {
+                    idx += "${it + count + 1} "
+                }
+                appendLine(("l $idx").trim())
+                count += l.size
+            }
+        }
+        File(path).writeText(obj)
+    }
+
+    fun export(sh: ShapeContour, res: Int) {
+        val pts = sh.equidistantPositions(res)
+        val l = pts.map { Vector3(it.x, it.y, 0.0) }
+        addLine(l)
+    }
+
+    fun export(shapes: List<ShapeContour>, res: Int) {
+        val l = List(res) {
+            shapes.map { sh ->
+                export(sh, res)
             }
         }
     }
