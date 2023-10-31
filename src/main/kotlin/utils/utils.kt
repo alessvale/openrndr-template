@@ -8,6 +8,7 @@ import org.openrndr.extra.noise.uniform
 import org.openrndr.math.Vector2
 import org.openrndr.shape.*
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sign
@@ -281,4 +282,20 @@ class Feedback(private val w: Int, private val h: Int) {
             }
         }
     }
+}
+
+/**
+ * Creates index buffer from list of vertices
+ */
+
+fun getBufferFromIndices(indices: List<Int>):IndexBuffer{
+    val ib = indexBuffer(indices.size, IndexType.INT32)
+    val bb = ByteBuffer.allocateDirect(indices.size * 4)
+    bb.order(ByteOrder.nativeOrder())
+    indices.forEach {
+        bb.putInt(it)
+    }
+    bb.rewind()
+    ib.write(bb)
+    return ib
 }
