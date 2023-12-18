@@ -56,7 +56,6 @@ open class PhongMaterial: Material {
                     }  
             """.trimIndent()
     var fragTrans: String = """         
-                    vec2 uv = va_texCoord0.xy;
                     vec3 lightDir = normalize(p_lightPos);
                     vec3 normal = normalize(v_worldNormal);
                     float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005); 
