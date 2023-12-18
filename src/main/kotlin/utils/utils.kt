@@ -6,6 +6,7 @@ import org.openrndr.extra.noise.Random
 import org.openrndr.extra.noise.simplex
 import org.openrndr.extra.noise.uniform
 import org.openrndr.math.Vector2
+import org.openrndr.math.Vector3
 import org.openrndr.shape.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -257,7 +258,7 @@ fun List<Vector2>.sortClockwise():List<Vector2>{
 /**
  * Implements precomputed loopable simplex noise texture
  */
-fun getNoiseTexture( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:Int = 128, freq: Double = 0.004 ):VolumeTexture {
+fun getNoiseTexture( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:Int = 128, freq: Double = 0.004 , seed: Int = 10):VolumeTexture {
     val tn = volumeTexture(noiseWidth, noiseHeight, noiseDepth)
     val buffer = ByteBuffer.allocateDirect(tn.width * tn.height * tn.format.componentCount * tn.type.componentSize)
 
@@ -266,7 +267,7 @@ fun getNoiseTexture( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:In
             for (x in 0 until tn.width) {
                 val uVal = cos(z / noiseDepth.toDouble() * 2 * PI) * 0.5 + 0.5
                 val wVal = sin(z / noiseDepth.toDouble() * 2 * PI) * 0.5 + 0.5
-                val noiseValue = simplex(10, x * freq, y * freq, uVal, wVal) * 0.5 + 0.5
+                val noiseValue = simplex(seed, x * freq, y * freq, uVal, wVal) * 0.5 + 0.5
                 for (c in 0 until tn.format.componentCount) {
                     buffer.put((noiseValue * 255).toInt().toByte())
                 }
@@ -339,4 +340,147 @@ fun getBufferFromIndices(indices: List<Int>):IndexBuffer{
     bb.rewind()
     ib.write(bb)
     return ib
+}
+
+/**
+ *
+ */
+fun sumOctave(
+    num_iterations: Int,
+    x: Double,
+    y: Double,
+    u:Double,
+    v:Double,
+    persistence: Double,
+    scale: Double,
+    low: Double,
+    high: Double
+): Double {
+    var maxAmp: Double = 0.0
+    var amp = 1.0
+    var freq = scale
+    var noise = 0.0
+
+    for (i in 0 until num_iterations) {
+        noise += (simplex(10, x * freq, y * freq, u, v) + 1.0)/2.0 * amp
+        maxAmp += amp
+        amp *= persistence
+        freq *= 2.0
+    }
+    noise /= maxAmp
+    noise = noise * (high - low) / 2 + (high + low) / 2
+
+    return noise
+}
+
+fun getNoiseTextureBrown( noiseWidth:Int = 512, noiseHeight:Int = 512,  noiseDepth:Int = 128, freq: Double = 0.004 , seed: Int = 10):VolumeTexture {
+    val tn = volumeTexture(noiseWidth, noiseHeight, noiseDepth)
+    val buffer = ByteBuffer.allocateDirect(tn.width * tn.height * tn.format.componentCount * tn.type.componentSize)
+
+    val scale = freq
+    for (z in 0 until tn.depth) {
+        for (y in 0 until tn.height) {
+            for (x in 0 until tn.width) {
+                val uVal = cos(z / noiseDepth.toDouble() * 2 * PI) * 0.5 + 0.5
+                val wVal = sin(z / noiseDepth.toDouble() * 2 * PI) * 0.5 + 0.5
+                val noiseValue = sumOctave(8, x.toDouble(), y.toDouble(), 0.5, scale, uVal, wVal, 0.0, 1.0)
+                for (c in 0 until tn.format.componentCount) {
+                    buffer.put((noiseValue * 255).toInt().toByte())
+                }
+            }
+        }
+        buffer.rewind()
+        tn.write(z, buffer)
+    }
+    return tn
+}
+
+fun Drawer.getShadows(rt:RenderTarget, lightPos:Vector3, function:ShadeStyle.() -> Unit):ColorBuffer{
+
+    val lightProjection = org.openrndr.math.transforms.ortho(-100.0, 100.0, -100.0, 100.0, -120.0, 120.0)
+    val lightView = org.openrndr.math.transforms.lookAt(lightPos, Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 1.0))
+    val lightSpaceProjection = lightProjection * lightView
+
+    val shadeLight = shadeStyle {
+        vertexTransform = """
+                    x_projectionMatrix = p_lightSpaceMatrix;                   
+                """.trimIndent()
+
+        fragmentTransform = """
+                    x_fill.rgb = vec3(gl_FragCoord.z);
+                """.trimIndent()
+    }
+    shadeLight.parameter("lightSpaceMatrix", lightSpaceProjection)
+
+    isolatedWithTarget(rt){
+        clear(ColorRGBa.BLACK)
+        cullTestPass = CullTestPass.FRONT
+        function(shadeLight)
+    }
+    return rt.colorBuffer(0)
+}
+
+/**
+ * Gets a shadestyle which implements shadows
+ */
+fun getShadowPhong(lightPos: Vector3, shadowMap: ColorBuffer):ShadeStyle{
+    val lightProjection = org.openrndr.math.transforms.ortho(-100.0, 100.0, -100.0, 100.0, -120.0, 120.0)
+    val lightView = org.openrndr.math.transforms.lookAt(lightPos, Vector3(0.0, 0.0, 0.0), Vector3(0.0, 0.0, 1.0))
+    val lightSpaceProjection = lightProjection * lightView
+
+    val shade = shadeStyle {
+        vertexPreamble = """
+                out vec4 FragPosLightSpace;
+            """.trimIndent()
+        vertexTransform = """
+                FragPosLightSpace = p_lightSpaceMatrix * x_modelMatrix * vec4(a_position, 1.0);
+            """.trimIndent()
+        fragmentPreamble = """
+                in vec4 FragPosLightSpace;
+                float ShadowCalculation(vec4 fragPosLightSpace, sampler2D shadowMap, float bias)
+                    {
+                        // perform perspective divide
+                        vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+                        // transform to [0,1] range
+                        projCoords = projCoords * 0.5 + 0.5;
+                        // get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+                        float closestDepth = 1.0;
+                        if (projCoords.x >= 0 && projCoords.x <= 1.0 && projCoords.y >= 0.0 && projCoords.y <= 1.0){ 
+                            closestDepth = texture(shadowMap, projCoords.xy).r; 
+                        }
+                        // get depth of current fragment from light's perspective
+                        float currentDepth = clamp(projCoords.z, 0.0, 1.0);
+                        // check whether current frag pos is in shadow
+                        float shadow = 0.0;
+                        for( float x = -3; x<=4; x++){
+                            for( float y = -3; y<=4; y++){
+                            vec2 coord = projCoords.xy + vec2(x,y) * 0.0015;
+                            float closestDepth = 1.0;
+                            if (coord.x >= 0 && coord.x <= 1.0 && coord.y >= 0.0 && coord.y <= 1.0){ 
+                                closestDepth = texture(shadowMap, coord.xy).r; 
+                            }
+                            shadow += currentDepth - bias > closestDepth  ? 1.0/32.0 : 0.0;
+                            }
+                        }
+                       
+                        
+                        return shadow;
+                    }  
+            """.trimIndent()
+        fragmentTransform = """
+             
+                    vec2 uv = va_texCoord0.xy;
+                    vec3 lightDir = normalize(p_lightPos);
+                    vec3 normal = normalize(v_worldNormal);
+                    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005); 
+                    float shadow = ShadowCalculation(FragPosLightSpace, p_depthImg, bias);
+                    float d = max(dot(lightDir, normal), 0.0);
+                    x_fill.rgb = p_color * (d * (1.0 - shadow) + p_ambient) ;
+                """.trimIndent()
+    }
+    shade.parameter("lightPos", lightPos)
+    shade.parameter("lightSpaceMatrix", lightSpaceProjection)
+    shade.parameter("depthImg", shadowMap)
+    shade.parameter("ambient", 0.1)
+    return shade
 }
