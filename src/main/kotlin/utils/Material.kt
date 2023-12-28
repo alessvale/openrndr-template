@@ -24,6 +24,7 @@ open class PhongMaterial: Material {
     var shadowSmooth: Double = 0.001
     var lightPos: Vector3 = Vector3.ZERO
     var shadowMap: ColorBuffer = colorBuffer(1, 1)
+    var shadowStrength: Double = 0.5
     var vertexPre: String = """
                 out vec4 FragPosLightSpace;
             """.trimIndent()
@@ -68,7 +69,7 @@ open class PhongMaterial: Material {
                     vec3 reflectDir = reflect(-lightDir, normal);
                     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
                     vec4 color = p_color;
-                    x_fill.rgb = color.xyz * ((diffuse * p_diffStrength + spec * p_specStrength) * (1.0 - shadow) + p_ambient) ;
+                    x_fill.rgb = color.xyz * ((diffuse * p_diffStrength + spec * p_specStrength) * (1.0 - shadow * p_shadowStrength) + p_ambient) ;
                     x_fill.a = color.a;
                 """.trimIndent()
 
@@ -87,6 +88,7 @@ open class PhongMaterial: Material {
         shade.parameter("specStrength", specular)
         shade.parameter("shadows", shadows)
         shade.parameter("shadowSmooth", shadowSmooth)
+        shade.parameter("shadowStrength", shadowStrength)
         shade.parameter("depthImg", shadowMap)
 
         if (shadows) {
