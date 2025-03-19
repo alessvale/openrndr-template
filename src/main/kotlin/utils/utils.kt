@@ -484,3 +484,15 @@ fun getShadowPhong(lightPos: Vector3, shadowMap: ColorBuffer):ShadeStyle{
     shade.parameter("ambient", 0.1)
     return shade
 }
+
+/**
+ * Get points from a ShapeContour.
+ */
+fun ShapeContour.getPoints():List<Vector2>{
+    val pts = this.segments.map{it.start}.toMutableList()
+    if (!this.closed){
+        val p = this.segments.last().end
+        pts.add(p)
+    }
+    return pts.toList()
+}
